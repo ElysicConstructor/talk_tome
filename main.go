@@ -1,0 +1,57 @@
+package main
+
+import (
+	"sync"
+
+	"github.com/gofiber/fiber/v2"
+)
+
+// MessageStore speichert Nachrichten im Speicher
+type MessageStore struct {
+	messages []string
+	mu       sync.Mutex
+}
+
+func (store *MessageStore) Add(msg string) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	store.messages = append(store.messages, msg)
+}
+
+func (store *MessageStore) GetAll() []string {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	return append([]string{}, store.messages...)
+}
+
+func main() {
+	app := fiber.New()
+	store := &MessageStore{}
+
+	// Einfacher Status-Endpunkt
+	app.Get("/status", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
+			"status": "online",
+		})
+	})
+
+	// Nachricht senden (POST /send {"message": "Hallo"})
+	app.Post("/send", func(c *fiber.Ctx) error {
+		var body struct {
+			Message string `json:"message"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
+		}
+		store.Add(body.Message)
+		// Hier würdest du die Nachricht auch in deinem P2P-Netz versenden
+		return c.JSON(fiber.Map{"sent": body.Message})
+	})
+
+	// Alle Nachrichten abrufen
+	app.Get("/messages", func(c *fiber.Ctx) error {
+		return c.JSON(store.GetAll())
+	})
+
+	app.Listen(":8080")
+}
